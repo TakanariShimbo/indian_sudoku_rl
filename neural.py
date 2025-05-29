@@ -1,21 +1,53 @@
+import random
+from collections import deque
+
 import numpy as np
-import tensorflow.compat.v1 as tf
-tf.disable_v2_behavior()
- 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+from config import *
+
+
+class DQNetwork(nn.Module):
+    """Deep Q-Network model"""
+
+    def __init__(self, n_features, n_actions, hidden_size=HIDDEN_SIZE):
+        super(DQNetwork, self).__init__()
+        self.fc1 = nn.Linear(n_features, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, n_actions)
+
+        # Initialize weights
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize network weights"""
+        for layer in [self.fc1, self.fc2]:
+            nn.init.normal_(layer.weight, 0, 0.3)
+            nn.init.constant_(layer.bias, 0.1)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        return self.fc2(x)
+
+
 class DeepQNetwork:
+    """Deep Q-Network agent with experience replay and target network"""
+
     def __init__(
         self,
         n_actions,
         n_features,
-        learning_rate=0.01,
-        reward_decay=0.9,
-        e_greedy=0.9,
-        replace_target_iter=300,
-        memory_size=500,
-        batch_size=32,
-        e_greedy_increment=None,
-        output_graph=False
+        learning_rate=LEARNING_RATE,
+        reward_decay=REWARD_DECAY,
+        e_greedy=EPSILON_GREEDY,
+        replace_target_iter=REPLACE_TARGET_ITER,
+        memory_size=MEMORY_SIZE,
+        batch_size=BATCH_SIZE,
+        e_greedy_increment=EPSILON_INCREMENT,
     ):
+
         self.n_actions = n_actions
         self.n_features = n_features
         self.lr = learning_rate
@@ -25,137 +57,122 @@ class DeepQNetwork:
         self.memory_size = memory_size
         self.batch_size = batch_size
         self.epsilon_increment = e_greedy_increment
-        # start epsilon at 0 if we will increment, else at max
+
+        # Initialize epsilon
         self.epsilon = 0.0 if e_greedy_increment is not None else self.epsilon_max
- 
+
+        # Counters
         self.learn_step_counter = 0
-        # memory: [s, a, r, s_], so width = n_features * 2 + 2
-        self.memory = np.zeros((self.memory_size, n_features * 2 + 2))
- 
-        # build eval & target nets
-        self._build_net()
- 
-        # replace target parameters op
-        t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
-        e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='evaluation_net')
-        with tf.variable_scope('hard_replacement'):
-            self.target_replace_op = [
-                tf.assign(t, e) for t, e in zip(t_params, e_params)
-            ]
- 
-        # session & init
-        self.sess = tf.Session()
-        if output_graph:
-            tf.summary.FileWriter("logs/", self.sess.graph)
-        self.sess.run(tf.global_variables_initializer())
-        self.cost_his = []
- 
-    def _build_net(self):
-        # ----- placeholders -----
-        self.s   = tf.placeholder(tf.float32, [None, self.n_features], name='s')    # current state
-        self.s_  = tf.placeholder(tf.float32, [None, self.n_features], name='s_')   # next state
-        self.r   = tf.placeholder(tf.float32, [None, ], name='r')                  # reward
-        self.a   = tf.placeholder(tf.int32,   [None, ], name='a')                  # action taken
- 
-        w_init = tf.random_normal_initializer(0., 0.3)
-        b_init = tf.constant_initializer(0.1)
- 
-        # ----- evaluation network -----
-        with tf.variable_scope('evaluation_net'):
-            e1 = tf.layers.dense(
-                self.s, 20, tf.nn.relu,
-                kernel_initializer=w_init,
-                bias_initializer=b_init,
-                name='e1'
-            )
-            self.q_eval = tf.layers.dense(
-                e1, self.n_actions,
-                kernel_initializer=w_init,
-                bias_initializer=b_init,
-                name='q'
-            )
- 
-        # ----- target network -----
-        with tf.variable_scope('target_net'):
-            t1 = tf.layers.dense(
-                self.s_, 20, tf.nn.relu,
-                kernel_initializer=w_init,
-                bias_initializer=b_init,
-                name='t1'
-            )
-            self.q_next = tf.layers.dense(
-                t1, self.n_actions,
-                kernel_initializer=w_init,
-                bias_initializer=b_init,
-                name='t2'
-            )
- 
-        # ----- Q target -----
-        with tf.variable_scope('q_target'):
-            q_target = self.r + self.gamma * tf.reduce_max(self.q_next, axis=1, name='qmax_s_')
-            self.q_target = tf.stop_gradient(q_target)
- 
-        # ----- Q eval for the taken actions -----
-        with tf.variable_scope('q_eval'):
-            a_indices = tf.stack(
-                [tf.range(tf.shape(self.a)[0], dtype=tf.int32), self.a],
-                axis=1
-            )
-            self.q_eval_wrt_a = tf.gather_nd(params=self.q_eval, indices=a_indices)
- 
-        # ----- loss & train -----
-        with tf.variable_scope('loss'):
-            self.loss = tf.reduce_mean(
-                tf.squared_difference(self.q_target, self.q_eval_wrt_a),
-                name='TD_error'
-            )
-        with tf.variable_scope('train'):
-            self._train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
- 
-    def store_transition(self, s, a, r, s_):
-        if not hasattr(self, 'memory_counter'):
-            self.memory_counter = 0
-        transition = np.hstack((s, [a, r], s_))
-        index = self.memory_counter % self.memory_size
-        self.memory[index, :] = transition
+        self.memory_counter = 0
+
+        # Experience replay memory
+        self.memory = deque(maxlen=memory_size)
+
+        # Device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {self.device}")
+
+        # Networks
+        self.eval_net = DQNetwork(n_features, n_actions).to(self.device)
+        self.target_net = DQNetwork(n_features, n_actions).to(self.device)
+
+        # Optimizer
+        self.optimizer = optim.RMSprop(self.eval_net.parameters(), lr=learning_rate)
+
+        # Loss function
+        self.loss_func = nn.MSELoss()
+
+        # Initialize target network
+        self.target_net.load_state_dict(self.eval_net.state_dict())
+
+        # Cost history
+        self.cost_history = []
+
+    def store_transition(self, state, action, reward, next_state):
+        """Store experience in replay memory"""
+        transition = (state, action, reward, next_state)
+        self.memory.append(transition)
         self.memory_counter += 1
- 
+
     def choose_action(self, observation):
-        observation = observation[np.newaxis, :]
+        """Choose action using epsilon-greedy policy"""
+        observation = torch.FloatTensor(observation).unsqueeze(0).to(self.device)
+
         if np.random.uniform() < self.epsilon:
-            q_values = self.sess.run(self.q_eval, feed_dict={self.s: observation})
-            action = np.argmax(q_values)
+            # Greedy action
+            with torch.no_grad():
+                q_values = self.eval_net(observation)
+                action = q_values.argmax().item()
         else:
+            # Random action
             action = np.random.randint(0, self.n_actions)
+
         return action
- 
+
     def learn(self):
-        # update target network
+        """Train the network using experience replay"""
+        # Update target network
         if self.learn_step_counter % self.replace_target_iter == 0:
-            self.sess.run(self.target_replace_op)
-            print('\n--- target network parameters replaced ---\n')
- 
-        # sample batch from memory
-        if self.memory_counter > self.memory_size:
-            sample_idx = np.random.choice(self.memory_size, size=self.batch_size)
-        else:
-            sample_idx = np.random.choice(self.memory_counter, size=self.batch_size)
-        batch = self.memory[sample_idx, :]
- 
-        # train
-        _, cost = self.sess.run(
-            [self._train_op, self.loss],
-            feed_dict={
-                self.s:   batch[:, :self.n_features],
-                self.a:   batch[:, self.n_features],
-                self.r:   batch[:, self.n_features + 1],
-                self.s_:  batch[:, -self.n_features:]
-            }
-        )
-        self.cost_his.append(cost)
- 
-        # increase epsilon
+            self.target_net.load_state_dict(self.eval_net.state_dict())
+            print("\n--- Target network parameters replaced ---\n")
+
+        # Sample batch from memory
+        if len(self.memory) < self.batch_size:
+            return
+
+        batch = random.sample(self.memory, self.batch_size)
+
+        # Unpack batch
+        states = torch.FloatTensor([t[0] for t in batch]).to(self.device)
+        actions = torch.LongTensor([t[1] for t in batch]).to(self.device)
+        rewards = torch.FloatTensor([t[2] for t in batch]).to(self.device)
+        next_states = torch.FloatTensor([t[3] for t in batch]).to(self.device)
+
+        # Current Q values
+        current_q_values = self.eval_net(states).gather(1, actions.unsqueeze(1))
+
+        # Next Q values from target network
+        with torch.no_grad():
+            next_q_values = self.target_net(next_states).max(1)[0]
+            target_q_values = rewards + (self.gamma * next_q_values)
+
+        # Compute loss
+        loss = self.loss_func(current_q_values.squeeze(), target_q_values)
+
+        # Optimize
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        # Store cost
+        self.cost_history.append(loss.item())
+
+        # Update epsilon
         if self.epsilon_increment is not None:
             self.epsilon = min(self.epsilon + self.epsilon_increment, self.epsilon_max)
- 
+
         self.learn_step_counter += 1
+
+    def save_model(self, filepath):
+        """Save the trained model"""
+        torch.save(
+            {
+                "eval_net_state_dict": self.eval_net.state_dict(),
+                "target_net_state_dict": self.target_net.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "epsilon": self.epsilon,
+                "learn_step_counter": self.learn_step_counter,
+            },
+            filepath,
+        )
+        print(f"Model saved to {filepath}")
+
+    def load_model(self, filepath):
+        """Load a trained model"""
+        checkpoint = torch.load(filepath, map_location=self.device)
+        self.eval_net.load_state_dict(checkpoint["eval_net_state_dict"])
+        self.target_net.load_state_dict(checkpoint["target_net_state_dict"])
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.epsilon = checkpoint["epsilon"]
+        self.learn_step_counter = checkpoint["learn_step_counter"]
+        print(f"Model loaded from {filepath}")

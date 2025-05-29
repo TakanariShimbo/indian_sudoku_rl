@@ -1,131 +1,141 @@
 import time
-import pandas as pd
-import numpy as np
 import os
 
+import numpy as np
 
-# Data Pre-processing
-def split(word):
-    return [char for char in word]
-
-
-# Load the puzzles and solutions
-COLUMNS = ["quizzes", "solutions"]
-PATH = r".\sudoku.csv"
-df_train = pd.read_csv(PATH, skipinitialspace=True, names=COLUMNS, index_col=False)
-
-quizzes = df_train["quizzes"].astype(str)
-solutions = df_train["solutions"].astype(str)
+from data_loader import SudokuDataLoader
+from config import SUDOKU_SIZE, AGENT_START_POSITION
 
 
-class board(object):
+class SudokuEnvironment:
+    """Sudoku game environment for RL agent"""
+
     def __init__(self):
-        super(board, self).__init__()
-        # Choose Actions: up, down, left, right, then insert 1–9
+        # Action space: movement (up, down, left, right) + number insertion (1-9)
         self.action_space = ["u", "d", "l", "r", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
         self.n_actions = len(self.action_space)
-        # Features in Neural Network
+
+        # State features: agent position (row, col)
         self.n_features = 2
-        # Which puzzle we're on
-        self.mazecount = 1
-        self._build_maze()
 
-    def _build_maze(self):
-        # Making Environment
-        self.currentquiz = quizzes.iloc[self.mazecount]
-        self.quizreshaped = np.asarray(self.currentquiz)
-        self.quizarray = split(str(self.quizreshaped))
-        # Generating binary sudoku array for fixed-cell mask
-        self.binaryquiz = []
-        for i in self.quizarray:
-            if i == "0":
-                self.binaryquiz.append("0")
-            else:
-                self.binaryquiz.append("1")
-        self.quizarray = np.array(self.quizarray).reshape(9, 9)
-        self.binaryquizarray = np.array(self.binaryquiz).reshape(9, 9)
-        # Agent starts at (0,0)
-        self.agent = np.array([0, 0])
+        # Data loader
+        self.data_loader = SudokuDataLoader()
+        self.total_puzzles = self.data_loader.get_puzzle_count()
 
-        # Extract solution for the current puzzle
-        self.currentsolution = solutions.iloc[self.mazecount]
-        self.solutionreshaped = np.asarray(self.currentsolution)
-        self.solutionarray = split(str(self.solutionreshaped))
-        self.solutionarray = np.array(self.solutionarray).reshape(9, 9)
+        # Current puzzle index
+        self.current_puzzle_index = 0
 
-        # Move on to the next puzzle index for next reset
-        self.mazecount += 1
+        # Initialize first puzzle
+        self._load_puzzle()
+
+    def _load_puzzle(self):
+        """Load the current puzzle and its solution"""
+        if self.current_puzzle_index >= self.total_puzzles:
+            self.current_puzzle_index = 0  # Wrap around
+
+        self.puzzle_array, self.solution_array, self.binary_mask = self.data_loader.get_puzzle_and_solution(self.current_puzzle_index)
+
+        # Agent starts at the configured position
+        self.agent_position = np.array(AGENT_START_POSITION.copy())
+
+        # Move to next puzzle for next reset
+        self.current_puzzle_index += 1
 
     def reset(self):
+        """Reset environment and return initial state"""
         time.sleep(0.0001)
-        # On reset, agent goes back to (0,0)
-        return np.array([0, 0])
+        self.agent_position = np.array(AGENT_START_POSITION.copy())
+        return self.agent_position.copy()
 
     def step(self, action):
-        s = self.agent
-        stemp = s
+        """
+        Execute action and return next state, reward, and done flag
 
-        # Movement actions
+        Args:
+            action: Integer action index
+
+        Returns:
+            tuple: (next_state, reward, done)
+        """
+        current_pos = self.agent_position.copy()
+
+        # Movement actions (0-3)
         if action == 0:  # up
-            if stemp[0] > 0:
-                stemp[0] -= 1
+            if current_pos[0] > 0:
+                current_pos[0] -= 1
         elif action == 1:  # down
-            if stemp[0] < 8:
-                stemp[0] += 1
-        elif action == 2:  # right
-            if stemp[1] < 8:
-                stemp[1] += 1
-        elif action == 3:  # left
-            if stemp[1] > 0:
-                stemp[1] -= 1
+            if current_pos[0] < SUDOKU_SIZE - 1:
+                current_pos[0] += 1
+        elif action == 2:  # left
+            if current_pos[1] > 0:
+                current_pos[1] -= 1
+        elif action == 3:  # right
+            if current_pos[1] < SUDOKU_SIZE - 1:
+                current_pos[1] += 1
 
-        # Insert-number actions (only on originally empty cells)
-        elif action == 4:  # insert 1
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "1"
-        elif action == 5:  # insert 2
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "2"
-        elif action == 6:  # insert 3
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "3"
-        elif action == 7:  # insert 4
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "4"
-        elif action == 8:  # insert 5
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "5"
-        elif action == 9:  # insert 6
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "6"
-        elif action == 10:  # insert 7
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "7"
-        elif action == 11:  # insert 8
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "8"
-        elif action == 12:  # insert 9
-            if self.binaryquizarray[s[0], s[1]] == "0":
-                self.quizarray[s[0], s[1]] = "9"
+        # Number insertion actions (4-12)
+        elif 4 <= action <= 12:
+            number = str(action - 3)  # Convert action to number (1-9)
+            row, col = self.agent_position
 
-        # Reward logic: puzzle completed?
-        if (self.quizarray == self.solutionarray).all():
-            reward = 1
-            done = True
-        else:
-            reward = 0
-            done = False
+            # Only insert if the cell was originally empty
+            if self.binary_mask[row, col] == "0":
+                self.puzzle_array[row, col] = number
 
-        # Next state
+        # Calculate reward
+        reward, done = self._calculate_reward()
+
+        # Update agent position for movement actions
         if action < 4:
-            s_ = stemp
+            self.agent_position = current_pos
+
+        # Display current state (optional)
+        self._display_state()
+
+        return self.agent_position.copy(), reward, done
+
+    def _calculate_reward(self):
+        """Calculate reward based on current puzzle state"""
+        if np.array_equal(self.puzzle_array, self.solution_array):
+            return 1.0, True  # Puzzle solved
         else:
-            s_ = s
+            return 0.0, False  # Puzzle not yet solved
 
-        # (Optional) clear console and display current grid
-        cls = lambda: os.system("cls")
-        cls()
-        print(self.quizarray)
-        time.sleep(0.0001)
+    def _display_state(self):
+        """Display current puzzle state (optional)"""
+        if hasattr(self, "_display_enabled") and self._display_enabled:
+            os.system("cls" if os.name == "nt" else "clear")
+            print("Current Sudoku State:")
+            print("-" * 19)
+            for i, row in enumerate(self.puzzle_array):
+                if i % 3 == 0 and i != 0:
+                    print("-" * 19)
+                row_str = ""
+                for j, cell in enumerate(row):
+                    if j % 3 == 0 and j != 0:
+                        row_str += "| "
+                    # Highlight agent position
+                    if [i, j] == self.agent_position.tolist():
+                        row_str += f"[{cell}]"
+                    else:
+                        row_str += f" {cell} "
+                print(row_str)
+            print("-" * 19)
+            time.sleep(0.001)
 
-        return s_, reward, done
+    def enable_display(self, enabled=True):
+        """Enable or disable visual display of the puzzle"""
+        self._display_enabled = enabled
+
+    def get_current_state(self):
+        """Get current state information"""
+        return {
+            "puzzle": self.puzzle_array.copy(),
+            "solution": self.solution_array.copy(),
+            "agent_position": self.agent_position.copy(),
+            "binary_mask": self.binary_mask.copy(),
+        }
+
+    def next_puzzle(self):
+        """Load the next puzzle"""
+        self._load_puzzle()
