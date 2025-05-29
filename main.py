@@ -6,7 +6,6 @@ import csv
 import datetime
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from boardenv import SudokuEnvironment
 from neural import DeepQNetwork
@@ -388,104 +387,6 @@ class SudokuTrainer:
 
         return success_rate, avg_steps
 
-    def plot_learning_curves(self, save_path="learning_curves.png"):
-        """Plot detailed learning curves"""
-        if not self.training_stats["episode_rewards"]:
-            print("No training data to plot")
-            return
-
-        # Smoothing function
-        def smooth(data, window=50):
-            if len(data) < window:
-                return data
-            smoothed = []
-            for i in range(len(data)):
-                start = max(0, i - window // 2)
-                end = min(len(data), i + window // 2)
-                smoothed.append(np.mean(data[start:end]))
-            return smoothed
-
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        fig.suptitle("Sudoku RL Training Progress", fontsize=16)
-
-        # 1. Episode Rewards
-        ax = axes[0, 0]
-        rewards = self.training_stats["episode_rewards"]
-        ax.plot(rewards, alpha=0.3, color="blue", label="Raw")
-        ax.plot(smooth(rewards), color="blue", linewidth=2, label="Smoothed")
-        ax.set_title("Episode Rewards")
-        ax.set_xlabel("Episode")
-        ax.set_ylabel("Reward")
-        ax.legend()
-        ax.grid(True)
-
-        # 2. Episode Steps
-        ax = axes[0, 1]
-        steps = self.training_stats["episode_steps"]
-        ax.plot(steps, alpha=0.3, color="red", label="Raw")
-        ax.plot(smooth(steps), color="red", linewidth=2, label="Smoothed")
-        ax.set_title("Episode Steps")
-        ax.set_xlabel("Episode")
-        ax.set_ylabel("Steps")
-        ax.legend()
-        ax.grid(True)
-
-        # 3. Training Loss
-        ax = axes[0, 2]
-        if self.training_stats["loss_history"]:
-            loss = self.training_stats["loss_history"]
-            ax.plot(loss, alpha=0.3, color="green", label="Raw")
-            ax.plot(smooth(loss, 200), color="green", linewidth=2, label="Smoothed")
-        ax.set_title("Training Loss")
-        ax.set_xlabel("Learning Step")
-        ax.set_ylabel("Loss")
-        ax.legend()
-        ax.grid(True)
-
-        # 4. Training Success Rate
-        ax = axes[1, 0]
-        if self.training_stats["puzzle_success_rates"]:
-            ax.plot(self.training_stats["puzzle_success_rates"], "o-", color="purple")
-        ax.set_title("Training Success Rate per Puzzle")
-        ax.set_xlabel("Puzzle Number")
-        ax.set_ylabel("Success Rate")
-        ax.grid(True)
-
-        # 5. Validation Success Rate
-        ax = axes[1, 1]
-        if self.training_stats["validation_success_rates"]:
-            ax.plot(self.training_stats["validation_episodes"], self.training_stats["validation_success_rates"], "o-", color="orange")
-        ax.set_title("Validation Success Rate")
-        ax.set_xlabel("Training Puzzles")
-        ax.set_ylabel("Success Rate")
-        ax.grid(True)
-
-        # 6. Epsilon Decay
-        ax = axes[1, 2]
-        if self.training_stats["epsilon_history"]:
-            ax.plot(self.training_stats["epsilon_history"], color="brown")
-        ax.set_title("Epsilon Decay")
-        ax.set_xlabel("Puzzle Number")
-        ax.set_ylabel("Epsilon Value")
-        ax.grid(True)
-
-        plt.tight_layout()
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        plt.show()
-        print(f"Learning curves saved to {save_path}")
-
-    def save_training_stats(self, filepath="training_stats.npz"):
-        """Save training statistics"""
-        np.savez(filepath, **self.training_stats)
-        print(f"Training statistics saved to {filepath}")
-
-    def load_training_stats(self, filepath="training_stats.npz"):
-        """Load training statistics"""
-        data = np.load(filepath, allow_pickle=True)
-        for key in data.keys():
-            self.training_stats[key] = data[key].tolist()
-        print(f"Training statistics loaded from {filepath}")
-
     def cleanup_old_models(self):
         """Clean up old model files, keep only best and latest"""
         current_dir = "."
@@ -531,12 +432,6 @@ def main():
         # Final evaluation with best model
         trainer.evaluate(num_puzzles=50, use_best_model=True)
 
-        # Plot learning curves
-        trainer.plot_learning_curves()
-
-        # Save training statistics
-        trainer.save_training_stats()
-
     except KeyboardInterrupt:
         print("\nTraining interrupted by user")
         # Save model even when interrupted
@@ -547,6 +442,7 @@ def main():
     print(f"Latest model saved as: {trainer.latest_model_path}")
     if trainer.enable_logging:
         print(f"Training log saved as: {trainer.log_filename}")
+        print(f"Use 'python viz_training.py' to visualize training progress")
 
 
 if __name__ == "__main__":
