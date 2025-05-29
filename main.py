@@ -254,7 +254,7 @@ class SudokuTrainer:
                     self.training_stats["solved_puzzles"] += 1
                     break
 
-                if episode_step > 1000000:
+                if episode_step > 1000:
                     break
 
             puzzle_rewards.append(episode_reward)
@@ -526,7 +526,7 @@ def main():
 
     try:
         # Train on first 100 puzzles (adjust as needed)
-        trainer.train_all_puzzles(max_puzzles=100)
+        trainer.train_all_puzzles(max_puzzles=100000)
 
         # Final evaluation with best model
         trainer.evaluate(num_puzzles=50, use_best_model=True)
