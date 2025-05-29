@@ -4,7 +4,6 @@ Configuration file for Sudoku RL training
 
 # Data configuration
 SUDOKU_CSV_PATH = "./sudoku-3m.csv"
-CSV_COLUMNS = ["quizzes", "solutions"]
 
 # Environment configuration
 SUDOKU_SIZE = 9
@@ -19,6 +18,11 @@ REPLACE_TARGET_ITER = 200
 MEMORY_SIZE = 2000
 BATCH_SIZE = 32
 HIDDEN_SIZE = 20
+
+# GPU configuration
+ENABLE_CUDA = True
+CUDA_DEVICE = 0
+GRADIENT_CLIP = 1.0
 
 # Training configuration
 EPISODES_PER_PUZZLE = 10

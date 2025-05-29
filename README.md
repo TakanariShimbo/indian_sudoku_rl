@@ -19,7 +19,9 @@
 1. 必要なパッケージをインストール:
 
 ```bash
-pip install -r requirements.txt
+# GPUサポート付きPyTorchをインストール
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install numpy>=1.21.0 pandas>=1.3.0 matplotlib>=3.4.0
 ```
 
 2. 数独データセット (`sudoku.csv`) を同じディレクトリに配置
@@ -28,6 +30,24 @@ pip install -r requirements.txt
 
 ```bash
 python main.py
+```
+
+## GPU 対応について
+
+このプロジェクトは GPU を自動的に検出し、利用可能な場合は GPU を使用します：
+
+- CUDA が利用可能な場合、自動的に GPU で実行
+- GPU メモリ使用量の最適化
+- cuDNN による自動チューニング
+- 勾配クリッピングによる学習の安定化
+
+GPU の設定は`config.py`で調整可能：
+
+```python
+# GPU configuration
+ENABLE_CUDA = True  # GPU使用の有効/無効
+CUDA_DEVICE = 0     # 使用するGPUデバイス
+GRADIENT_CLIP = 1.0 # 勾配クリッピングの閾値
 ```
 
 ## 使用方法
@@ -72,6 +92,8 @@ trainer.plot_training_progress()  # 学習進捗をプロット
 - Target Network
 - Epsilon-greedy exploration
 - RMSprop optimizer
+- GPU 加速による高速学習
+- 勾配クリッピングによる安定性向上
 
 ### 環境
 
@@ -92,7 +114,8 @@ trainer.plot_training_progress()  # 学習進捗をプロット
 
 ## パフォーマンス
 
-- PyTorch による高速化
+- PyTorch + CUDA による高速化
 - GPU 自動対応
 - メモリ効率の改善
 - より安定した学習
+- cuDNN による最適化

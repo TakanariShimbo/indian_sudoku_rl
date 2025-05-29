@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from config import SUDOKU_CSV_PATH, CSV_COLUMNS, SUDOKU_SIZE
+from config import SUDOKU_CSV_PATH, SUDOKU_SIZE
 
 
 class SudokuDataLoader:
