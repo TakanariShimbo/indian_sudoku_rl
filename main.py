@@ -90,6 +90,8 @@ class SudokuTrainer:
             "avg_steps_100",
             "success_rate_100",
             "cumulative_solved",
+            "validation_success_rate",
+            "validation_avg_steps",
         ]
 
         # Initialize CSV file with header
@@ -99,7 +101,7 @@ class SudokuTrainer:
 
         print(f"CSV logging enabled: {self.log_filename}")
 
-    def _log_episode(self, puzzle_index, episode_in_puzzle, reward, steps, solved, epsilon, loss):
+    def _log_episode(self, puzzle_index, episode_in_puzzle, reward, steps, solved, epsilon, loss, validation_success_rate=None, validation_avg_steps=None):
         """Log episode data to CSV"""
         if not self.enable_logging:
             return
@@ -131,6 +133,8 @@ class SudokuTrainer:
             "avg_steps_100": avg_steps_100,
             "success_rate_100": success_rate_100,
             "cumulative_solved": self.cumulative_solved,
+            "validation_success_rate": validation_success_rate if validation_success_rate is not None else "",
+            "validation_avg_steps": validation_avg_steps if validation_avg_steps is not None else "",
         }
 
         # Write to CSV
@@ -283,6 +287,17 @@ class SudokuTrainer:
         puzzle_success_rate = puzzle_solved / episodes
         self.training_stats["puzzle_success_rates"].append(puzzle_success_rate)
 
+        # Store last episode data for validation logging
+        self._last_episode_data = {
+            "puzzle_index": puzzle_index if puzzle_index is not None else -1,
+            "episode_in_puzzle": episodes,
+            "reward": puzzle_rewards[-1] if puzzle_rewards else 0,
+            "steps": puzzle_steps[-1] if puzzle_steps else 0,
+            "solved": puzzle_solved > 0,
+            "epsilon": self.agent.epsilon,
+            "loss": episode_loss,
+        }
+
         return np.mean(puzzle_rewards), np.mean(puzzle_steps), puzzle_success_rate
 
     def train_all_puzzles(self, max_puzzles=None):
@@ -322,6 +337,20 @@ class SudokuTrainer:
 
                 print(f"Validation success rate: {val_success_rate:.2%}")
                 print(f"Validation avg steps: {val_avg_steps:.1f}")
+
+                # Log validation result to CSV (use last episode data)
+                if hasattr(self, "_last_episode_data"):
+                    self._log_episode(
+                        puzzle_index=self._last_episode_data["puzzle_index"],
+                        episode_in_puzzle=self._last_episode_data["episode_in_puzzle"],
+                        reward=self._last_episode_data["reward"],
+                        steps=self._last_episode_data["steps"],
+                        solved=self._last_episode_data["solved"],
+                        epsilon=self._last_episode_data["epsilon"],
+                        loss=self._last_episode_data["loss"],
+                        validation_success_rate=val_success_rate,
+                        validation_avg_steps=val_avg_steps,
+                    )
 
                 # Save models (with best model check)
                 self._save_models(val_success_rate)
