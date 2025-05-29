@@ -1,5 +1,4 @@
 sudoku-3m.csv
 logs/
 *.pth
-*.npz
-*.png
+*.txt

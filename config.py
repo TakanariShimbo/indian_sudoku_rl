@@ -2,8 +2,9 @@
 Configuration file for Sudoku RL training
 """
 
-# Data configuration
-SUDOKU_CSV_PATH = "./sudoku-3m.csv"
+# Puzzle generation configuration
+PUZZLE_CACHE_SIZE = 1000  # Number of puzzles to pre-generate
+DEFAULT_DIFFICULTY = "medium"  # 'easy', 'medium', 'hard'
 
 # Environment configuration
 SUDOKU_SIZE = 9
