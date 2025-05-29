@@ -254,7 +254,7 @@ class SudokuTrainer:
                     self.training_stats["solved_puzzles"] += 1
                     break
 
-                if episode_step > 1000:
+                if episode_step > 1000000:
                     break
 
             puzzle_rewards.append(episode_reward)
