@@ -122,11 +122,17 @@ class DeepQNetwork:
 
         batch = random.sample(self.memory, self.batch_size)
 
-        # Unpack batch
-        states = torch.FloatTensor([t[0] for t in batch]).to(self.device)
-        actions = torch.LongTensor([t[1] for t in batch]).to(self.device)
-        rewards = torch.FloatTensor([t[2] for t in batch]).to(self.device)
-        next_states = torch.FloatTensor([t[3] for t in batch]).to(self.device)
+        # numpy array
+        states = np.array([t[0] for t in batch])
+        actions = np.array([t[1] for t in batch])
+        rewards = np.array([t[2] for t in batch])
+        next_states = np.array([t[3] for t in batch])
+
+        # numpy array to tensor
+        states = torch.FloatTensor(states).to(self.device)
+        actions = torch.LongTensor(actions).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device)
+        next_states = torch.FloatTensor(next_states).to(self.device)
 
         # Current Q values
         current_q_values = self.eval_net(states).gather(1, actions.unsqueeze(1))
