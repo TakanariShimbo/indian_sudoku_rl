@@ -21,7 +21,7 @@
 ```bash
 # GPUサポート付きPyTorchをインストール
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-pip install numpy>=1.21.0 pandas>=1.3.0 matplotlib>=3.4.0
+pip install numpy>=1.21.0 pandas>=1.3.0 matplotlib>=3.4.0 seaborn
 ```
 
 2. 数独データセット (`sudoku.csv`) を同じディレクトリに配置

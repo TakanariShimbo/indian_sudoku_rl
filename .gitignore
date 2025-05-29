@@ -1,2 +1,3 @@
 sudoku-3m.csv
 *.pth
+logs/
