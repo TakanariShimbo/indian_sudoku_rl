@@ -114,7 +114,6 @@ class DeepQNetwork:
         # Update target network
         if self.learn_step_counter % self.replace_target_iter == 0:
             self.target_net.load_state_dict(self.eval_net.state_dict())
-            print("\n--- Target network parameters replaced ---\n")
 
         # Sample batch from memory
         if len(self.memory) < self.batch_size:
